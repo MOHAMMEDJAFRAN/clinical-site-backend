@@ -1,31 +1,26 @@
 const express = require('express');
-const {createClinicalCenter, 
+const { 
 getAllClinicalCenters, 
 getClinicalCenter, 
 updateClinicalCenter,
 deleteClinicalCenter, 
-generateNewPassword} = require('../controllers/admin/clinicalCenters.conrollers');
-// const authController = require('../controllers/authController');
+generateNewPassword,
+registerMerchant,
+loginMerchant} = require('../controllers/admin/clinicalCenters.conrollers');
+const SuperadminController = require('../controllers/super_admin/superAdmin.controller');
+// const authController = require('../controllers/authController'
+const authMiddleware = require("../middleware/authMiddleware")
 
-const clinicalCentersRoute = express.Router();
+const router = express.Router();
+
 
 // // Protect all routes after this middleware
 // router.use(authController.protect);
 // router.use(authController.restrictTo('admin'));
 
-clinicalCentersRoute
-  .route('/')
-  .get(getAllClinicalCenters)
-  .post(createClinicalCenter);
+router.post("/register",authMiddleware.authMiddleware, registerMerchant);
+router.post('/admin-register', SuperadminController.registerAdmin);
+router.post("/merchant-login", loginMerchant);
+router.post("/admin-login", SuperadminController.loginAdmin)
 
-clinicalCentersRoute
-  .route('/:id')
-  .get(getClinicalCenter)
-  .patch(updateClinicalCenter)
-  .delete(deleteClinicalCenter);
-
-clinicalCentersRoute
-  .route('/:id/generate-password')
-  .post(generateNewPassword);
-
-module.exports = clinicalCentersRoute;
+module.exports = router;
