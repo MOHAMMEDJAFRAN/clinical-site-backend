@@ -59,7 +59,7 @@ registerMerchant = async (req, res) => {
       address,
       in_chargename,
       phoneNumber,
-      isApproved: false // Default to false, admin must approve
+      isApproved: true // Default to false, admin must approve
     });
 
     // Send verification email (optional)

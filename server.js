@@ -4,6 +4,7 @@ const connectDB = require('./config/mongodp');
 const clinicalCentersRoute = require('./routes/clinicalCentersRoute');
 const authRoutes = require('./routes/authRoutes')
 const cors = require('cors');
+const clinicalCenters = require("./routes/clinicalCenters");
 
 
 const PORT = process.env.PORT || 5000
@@ -20,6 +21,7 @@ app.use(cors({
 app.use(express.json());
 app.use('/api/v1/clinicalCenters', clinicalCentersRoute);
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/all-centers', clinicalCenters);
 
 
 app.listen(PORT, () => console.log(`Sever running on port ${PORT}`))

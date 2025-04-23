@@ -37,7 +37,6 @@ exports.unifiedLogin = async (req, res) => {
       });
     }
 
-    // Initialize common response data
     const responseData = {
       success: true,
       token: '',
@@ -49,7 +48,6 @@ exports.unifiedLogin = async (req, res) => {
       profile: null
     };
 
-    // Handle different roles
     switch (user.role) {
       case 'merchant':
         const merchant = await Merchant.findOne({ user: user._id });
@@ -59,7 +57,7 @@ exports.unifiedLogin = async (req, res) => {
             message: 'Merchant profile not found'
           });
         }
-        
+
         if (!merchant.isApproved) {
           return res.status(403).json({
             success: false,
@@ -67,20 +65,35 @@ exports.unifiedLogin = async (req, res) => {
           });
         }
 
+        if (merchant.status === 'onhold') {
+          return res.status(403).json({
+            success: false,
+            message: 'Merchant account is on hold'
+          });
+        }
+
+        if (merchant.status === 'deactive') {
+          return res.status(403).json({
+            success: false,
+            message: 'Merchant account is deactivated'
+          });
+        }
+
         responseData.token = jwt.sign(
-          { 
-            id: user._id, 
+          {
+            id: user._id,
             role: user.role,
-            merchantId: merchant._id 
+            merchantId: merchant._id
           },
           process.env.JWT_SECRET,
           { expiresIn: process.env.JWT_EXPIRE }
         );
-        
+
         responseData.profile = {
           id: merchant._id,
           clinicname: merchant.clinicname,
-          isApproved: merchant.isApproved
+          isApproved: merchant.isApproved,
+          status: merchant.status
         };
         break;
 
@@ -94,16 +107,16 @@ exports.unifiedLogin = async (req, res) => {
         }
 
         responseData.token = jwt.sign(
-          { 
-            id: user._id, 
+          {
+            id: user._id,
             role: user.role,
             adminType: admin.adminType,
-            adminId: admin._id 
+            adminId: admin._id
           },
           process.env.JWT_SECRET,
           { expiresIn: process.env.JWT_EXPIRE }
         );
-        
+
         responseData.profile = {
           id: admin._id,
           name: admin.name,

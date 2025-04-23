@@ -37,6 +37,11 @@ const MerchantSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  status: {
+    type: String,
+    enum: ['Active', 'On Hold', 'Deactivated'],
+    default: 'Active'
+  },
   createdAt: {
     type: Date,
     default: Date.now
