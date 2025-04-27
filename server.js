@@ -15,7 +15,8 @@ connectDB()
 
 // Enable CORS for all routes
 app.use(cors({
-    origin: 'http://localhost:3000', // Your Next.js frontend URL
+    origin: 'https://clinical-site-test.vercel.app',
+    // 'http://localhost:3000', // Your Next.js frontend URL
     credentials: true
   }));
 app.use(express.json());
