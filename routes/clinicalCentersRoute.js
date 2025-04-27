@@ -1,12 +1,5 @@
 const express = require('express');
-const { 
-getAllClinicalCenters, 
-getClinicalCenter, 
-updateClinicalCenter,
-deleteClinicalCenter, 
-generateNewPassword,
-registerMerchant,
-loginMerchant} = require('../controllers/admin/clinicalCenters.conrollers');
+const { registerMerchant} = require('../controllers/admin/clinicalCenters.conrollers');
 const SuperadminController = require('../controllers/super_admin/superAdmin.controller');
 // const authController = require('../controllers/authController')
 const authMiddleware = require("../middleware/authMiddleware")
