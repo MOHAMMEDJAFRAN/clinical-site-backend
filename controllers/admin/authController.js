@@ -15,7 +15,7 @@ exports.unifiedLogin = async (req, res) => {
     if (!email || !password) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide email and password'
+        message: 'Please provide both email and password'
       });
     }
 
@@ -37,91 +37,30 @@ exports.unifiedLogin = async (req, res) => {
       });
     }
 
+    // Prepare common response data
     const responseData = {
       success: true,
       token: '',
       user: {
         id: user._id,
         email: user.email,
-        role: user.role
+        role: user.role,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        phone: user.phone,
+        avatar: user.avatar
       },
       profile: null
     };
 
+    // Handle different roles
     switch (user.role) {
       case 'merchant':
-        const merchant = await Merchant.findOne({ user: user._id });
-        if (!merchant) {
-          return res.status(403).json({
-            success: false,
-            message: 'Merchant profile not found'
-          });
-        }
-
-        if (!merchant.isApproved) {
-          return res.status(403).json({
-            success: false,
-            message: 'Merchant account not yet approved'
-          });
-        }
-
-        if (merchant.status === 'onhold') {
-          return res.status(403).json({
-            success: false,
-            message: 'Merchant account is on hold'
-          });
-        }
-
-        if (merchant.status === 'deactive') {
-          return res.status(403).json({
-            success: false,
-            message: 'Merchant account is deactivated'
-          });
-        }
-
-        responseData.token = jwt.sign(
-          {
-            id: user._id,
-            role: user.role,
-            merchantId: merchant._id
-          },
-          process.env.JWT_SECRET,
-          { expiresIn: process.env.JWT_EXPIRE }
-        );
-
-        responseData.profile = {
-          id: merchant._id,
-          clinicname: merchant.clinicname,
-          isApproved: merchant.isApproved,
-          status: merchant.status
-        };
+        await handleMerchantLogin(user, responseData, res);
         break;
 
       case 'admin':
-        const admin = await Admin.findOne({ user: user._id });
-        if (!admin) {
-          return res.status(403).json({
-            success: false,
-            message: 'Admin profile not found'
-          });
-        }
-
-        responseData.token = jwt.sign(
-          {
-            id: user._id,
-            role: user.role,
-            adminType: admin.adminType,
-            adminId: admin._id
-          },
-          process.env.JWT_SECRET,
-          { expiresIn: process.env.JWT_EXPIRE }
-        );
-
-        responseData.profile = {
-          id: admin._id,
-          name: admin.name,
-          adminType: admin.adminType
-        };
+        await handleAdminLogin(user, responseData, res);
         break;
 
       default:
@@ -131,14 +70,17 @@ exports.unifiedLogin = async (req, res) => {
         });
     }
 
-    // Update last login time
-    user.lastLoginAt = Date.now();
-    await user.save();
+    // If we haven't returned yet, proceed with successful login
+    if (responseData.token) {
+      // Update last login time
+      user.lastLoginAt = Date.now();
+      await user.save();
 
-    res.status(200).json(responseData);
+      return res.status(200).json(responseData);
+    }
 
   } catch (err) {
-    console.error(err);
+    console.error('Login error:', err);
     res.status(500).json({
       success: false,
       message: 'Server Error',
@@ -146,3 +88,103 @@ exports.unifiedLogin = async (req, res) => {
     });
   }
 };
+
+// Helper function for merchant login
+async function handleMerchantLogin(user, responseData, res) {
+  const merchant = await Merchant.findOne({ user: user._id });
+  
+  if (!merchant) {
+    res.status(403).json({
+      success: false,
+      message: 'Merchant profile not found'
+    });
+    return false;
+  }
+
+  // Check merchant account status
+  if (!merchant.isApproved) {
+    res.status(403).json({
+      success: false,
+      message: 'Merchant account not yet approved'
+    });
+    return false;
+  }
+
+  if (merchant.status === 'onhold') {
+    res.status(403).json({
+      success: false,
+      message: 'Merchant account is on hold'
+    });
+    return false;
+  }
+
+  if (merchant.status === 'deactive') {
+    res.status(403).json({
+      success: false,
+      message: 'Merchant account is deactivated'
+    });
+    return false;
+  }
+
+  // Generate token for merchant
+  responseData.token = generateToken(user, { merchantId: merchant._id });
+
+  // Add merchant profile data
+  responseData.profile = {
+    id: merchant._id,
+    clinicName: merchant.clinicname,
+    isApproved: merchant.isApproved,
+    status: merchant.status,
+    address: merchant.address,
+    // Add any other merchant fields you want to return
+    ...(merchant.specialization && { specialization: merchant.specialization }),
+    ...(merchant.bio && { bio: merchant.bio })
+  };
+
+  return true;
+}
+
+// Helper function for admin login
+async function handleAdminLogin(user, responseData, res) {
+  const admin = await Admin.findOne({ user: user._id });
+  
+  if (!admin) {
+    res.status(403).json({
+      success: false,
+      message: 'Admin profile not found'
+    });
+    return false;
+  }
+
+  // Generate token for admin
+  responseData.token = generateToken(user, { 
+    adminType: admin.adminType,
+    adminId: admin._id
+  });
+
+  // Add admin profile data
+  responseData.profile = {
+    id: admin._id,
+    name: admin.name,
+    adminType: admin.adminType,
+    // Add any other admin fields you want to return
+    ...(admin.department && { department: admin.department })
+  };
+
+  return true;
+}
+
+// Helper function to generate JWT token
+function generateToken(user, additionalData = {}) {
+  const payload = {
+    id: user._id,
+    role: user.role,
+    ...additionalData
+  };
+
+  return jwt.sign(
+    payload,
+    process.env.JWT_SECRET,
+    { expiresIn: process.env.JWT_EXPIRE }
+  );
+}
