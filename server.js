@@ -8,6 +8,7 @@ const clinicalCenters = require("./routes/clinicalCenters");
 const profileAdminRoute = require("./routes/profileAdminRoute")
 const doctorsRoute = require("./routes/doctorRoute")
 const userpageRoute = require("./routes/userpageRoute")
+const clinicDashboardRoute = require("./routes/clinicDashboardRoute")
 
 const PORT = process.env.PORT || 5000
 
@@ -17,8 +18,8 @@ connectDB()
 
 // Enable CORS for all routes
 app.use(cors({
-    origin:'http://localhost:3000', // Your Next.js frontend URL
-    // 'https://clinical-site-test.vercel.app'
+    origin:'https://clinical-site-test.vercel.app',
+    // 'http://localhost:3000',
     
     credentials: true
   }));
@@ -29,6 +30,7 @@ app.use('/api/v1/all-centers', clinicalCenters);
 app.use('/api/v1/admin-profile', profileAdminRoute);
 app.use('/api/v1/Doctors', doctorsRoute);
 app.use('/api/v1/user', userpageRoute);
+app.use('/api/v1/clinicDashboard', clinicDashboardRoute);
 
 
 app.listen(PORT, () => console.log(`Sever running on port ${PORT}`))
