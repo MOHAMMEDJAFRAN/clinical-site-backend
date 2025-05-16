@@ -9,6 +9,7 @@ const profileAdminRoute = require("./routes/profileAdminRoute")
 const doctorsRoute = require("./routes/doctorRoute")
 const userpageRoute = require("./routes/userpageRoute")
 const clinicDashboardRoute = require("./routes/clinicDashboardRoute")
+const allClinicAppointmentRoute = require("./routes/allClinicAppointmentsRoute")
 
 const PORT = process.env.PORT || 5000
 
@@ -20,7 +21,6 @@ connectDB()
 app.use(cors({
     origin:'https://clinical-site-test.vercel.app',
     // 'http://localhost:3000',
-    
     credentials: true
   }));
 app.use(express.json());
@@ -31,6 +31,7 @@ app.use('/api/v1/admin-profile', profileAdminRoute);
 app.use('/api/v1/Doctors', doctorsRoute);
 app.use('/api/v1/user', userpageRoute);
 app.use('/api/v1/clinicDashboard', clinicDashboardRoute);
+app.use('/api/v1/allClinicAppointments', allClinicAppointmentRoute);
 
 
 app.listen(PORT, () => console.log(`Sever running on port ${PORT}`))

@@ -19,6 +19,8 @@ router.post('/check-availability', availabilityController.checkAvailability); //
 // Get shift times for a doctor on a specific date
 router.get('/:doctorId/shift-times/:date', shiftTimeController.getShiftTimesByDoctorAndDate);
 
+router.get('/cities/clinics', doctorController.getClinicCities);
+
 // Create new appointment
 router.post('/appointments/create', appointmentController.createAppointment);
 

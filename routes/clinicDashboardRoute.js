@@ -12,7 +12,7 @@ router.route('/appointments/:appointmentId')
   .patch(dashboardController.updateAppointmentStatus);
 
 // Payment routes for appointments
-router.route('/appointments/:appointmentId/payments')
+router.route('/:appointmentId/payments')
   .post(paymentController.createPayment);
 
 // Specific payment operations

@@ -442,8 +442,16 @@ exports.addDoctorShifts = async (req, res) => {
       });
     }
 
-    // Process each new shift time
+    // Get existing shifts for these dates to prevent duplicates
+    const existingDates = [...new Set(shiftTimes.map(s => s.date))];
+    const existingShifts = await ShiftTime.find({
+      doctor: id,
+      date: { $in: existingDates },
+      isActive: true
+    }).session(session);
+
     const createdShifts = [];
+    
     for (const shift of shiftTimes) {
       // Basic validation
       if (!shift.date || !shift.timeRange) {
@@ -454,13 +462,26 @@ exports.addDoctorShifts = async (req, res) => {
         });
       }
 
-      // Create new shift
+      // Check for duplicate time ranges
+      const isDuplicate = existingShifts.some(
+        s => s.date === shift.date && s.timeRange === shift.timeRange
+      );
+      
+      if (isDuplicate) {
+        await session.abortTransaction();
+        return res.status(400).json({
+          success: false,
+          message: `Duplicate shift found for ${shift.date} with time ${shift.timeRange}`
+        });
+      }
+
+      // Create new shift with the provided shiftName
       const newShift = new ShiftTime({
         merchant: doctor.merchant,
         doctor: id,
         date: shift.date,
         timeRange: shift.timeRange,
-        shiftName: shift.shiftName || `Shift ${shift.timeRange}`,
+        shiftName: shift.shiftName, // Use the provided shift name
         status: shift.status || 'Available',
         isActive: true
       });
@@ -483,6 +504,7 @@ exports.addDoctorShifts = async (req, res) => {
 
   } catch (error) {
     await session.abortTransaction();
+    console.error('Error adding shifts:', error);
     res.status(400).json({ 
       success: false, 
       message: error.message 
@@ -499,7 +521,7 @@ exports.updateDoctorShifts = async (req, res) => {
 
   try {
     const { id: doctorId } = req.params;
-    const { shiftUpdates } = req.body; // Array of { shiftId, updates }
+    const { shiftUpdates } = req.body;
 
     // Validate input
     if (!shiftUpdates || !Array.isArray(shiftUpdates)) {
@@ -523,10 +545,18 @@ exports.updateDoctorShifts = async (req, res) => {
     const updatedShifts = [];
     
     // Process each update
-    for (const { shiftId, updates } of shiftUpdates) {
-      // Validate shift belongs to this doctor
+    for (const update of shiftUpdates) {
+      if (!update.shiftId) {
+        await session.abortTransaction();
+        return res.status(400).json({
+          success: false,
+          message: 'Each update must include a shiftId'
+        });
+      }
+
+      // Find and validate the shift
       const shift = await ShiftTime.findOne({
-        _id: shiftId,
+        _id: update.shiftId,
         doctor: doctorId
       }).session(session);
 
@@ -534,18 +564,16 @@ exports.updateDoctorShifts = async (req, res) => {
         await session.abortTransaction();
         return res.status(404).json({
           success: false,
-          message: `Shift ${shiftId} not found for this doctor`
+          message: `Shift ${update.shiftId} not found for this doctor`
         });
       }
 
-      // Apply updates (excluding protected fields)
-      const { date, timeRange, shiftName, status, isActive } = updates;
-      
-      if (date) shift.date = date;
-      if (timeRange) shift.timeRange = timeRange;
-      if (shiftName) shift.shiftName = shiftName;
-      if (status) shift.status = status;
-      if (typeof isActive === 'boolean') shift.isActive = isActive;
+      // Update fields
+      if (update.updates.timeRange) shift.timeRange = update.updates.timeRange;
+      if (update.updates.status) shift.status = update.updates.status;
+      if (update.updates.date) shift.date = update.updates.date;
+      if (update.updates.shiftName) shift.shiftName = update.updates.shiftName;
+      if (typeof update.updates.isActive === 'boolean') shift.isActive = update.updates.isActive;
 
       const updatedShift = await shift.save({ session });
       updatedShifts.push(updatedShift);
@@ -561,9 +589,11 @@ exports.updateDoctorShifts = async (req, res) => {
 
   } catch (error) {
     await session.abortTransaction();
+    console.error('Error updating shifts:', error);
     res.status(400).json({ 
       success: false, 
-      message: error.message 
+      message: error.message || 'Failed to update shifts',
+      error: error 
     });
   } finally {
     session.endSession();
@@ -597,8 +627,8 @@ exports.removeDoctorShifts = async (req, res) => {
       });
     }
 
-    // Deactivate the shifts (soft delete)
-    await ShiftTime.updateMany(
+    // Soft delete the shifts (set isActive to false)
+    const { modifiedCount } = await ShiftTime.updateMany(
       { 
         _id: { $in: shiftIds },
         doctor: id
@@ -613,15 +643,13 @@ exports.removeDoctorShifts = async (req, res) => {
     );
     
     await doctor.save({ session });
-
     await session.commitTransaction();
 
     res.status(200).json({
       success: true,
       message: 'Shifts removed successfully',
       data: {
-        removedCount: shiftIds.length,
-        remainingShifts: doctor.shiftTimes.length
+        removedCount: modifiedCount
       }
     });
 

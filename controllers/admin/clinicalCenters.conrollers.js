@@ -10,8 +10,7 @@ const jwt = require("jsonwebtoken")
  * @route   POST /api/merchants/register
  * @access  Public
  */
-exports.
-registerMerchant = async (req, res) => {
+exports.registerMerchant = async (req, res) => {
   try {
     const { 
       email, 
