@@ -11,7 +11,7 @@ const router = express.Router();
 // router.use(authController.protect);
 // router.use(authController.restrictTo('admin'));
 
-router.post("/register",authMiddleware.authMiddleware, registerMerchant);
+router.post('/register',authMiddleware.authMiddleware, registerMerchant);
 router.post('/admin-register', SuperadminController.registerAdmin);
 // router.post("/merchant-login", loginMerchant);
 // router.post("/admin-login", SuperadminController.loginAdmin)

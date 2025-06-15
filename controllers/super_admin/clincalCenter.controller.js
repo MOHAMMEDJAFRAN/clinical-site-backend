@@ -21,7 +21,7 @@ exports.getClinicalCenters = catchAsync(async (req, res, next) => {
   }
   
   // Select fields
-  const select = 'clinicname city address status inChargeName phoneNumber createdAt';
+  const select = 'clinicname city address status in_chargename phoneNumber createdAt';
   
   // Execute query
   const clinicalCenters = await ClinicalCenter.find(query)

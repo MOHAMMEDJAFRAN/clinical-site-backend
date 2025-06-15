@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const User = require('../../models/userModel');
 const Merchant = require('../../models/clinical.model');
 const Admin = require('../../models/adminmodel');
+const Staff = require('../../models/staff.model');
 
 // @desc    Unified login for all roles
 // @route   POST /api/v1/auth/login
@@ -61,6 +62,10 @@ exports.unifiedLogin = async (req, res) => {
 
       case 'admin':
         await handleAdminLogin(user, responseData, res);
+        break;
+
+      case 'staff':
+        await handleStaffLogin(user, responseData, res);
         break;
 
       default:
@@ -136,7 +141,6 @@ async function handleMerchantLogin(user, responseData, res) {
     isApproved: merchant.isApproved,
     status: merchant.status,
     address: merchant.address,
-    // Add any other merchant fields you want to return
     ...(merchant.specialization && { specialization: merchant.specialization }),
     ...(merchant.bio && { bio: merchant.bio })
   };
@@ -167,8 +171,59 @@ async function handleAdminLogin(user, responseData, res) {
     id: admin._id,
     name: admin.name,
     adminType: admin.adminType,
-    // Add any other admin fields you want to return
     ...(admin.department && { department: admin.department })
+  };
+
+  return true;
+}
+
+// Helper function for staff login
+async function handleStaffLogin(user, responseData, res) {
+  const staff = await Staff.findOne({ user: user._id }).populate('clinic');
+  
+  if (!staff) {
+    res.status(403).json({
+      success: false,
+      message: 'Staff profile not found'
+    });
+    return false;
+  }
+
+  // Check staff account status
+  if (!staff.isActive) {
+    res.status(403).json({
+      success: false,
+      message: 'Staff account is inactive'
+    });
+    return false;
+  }
+
+  if (staff.status === 'Inactive') {
+    res.status(403).json({
+      success: false,
+      message: 'Staff account is inactive'
+    });
+    return false;
+  }
+
+  // Generate token for staff
+  responseData.token = generateToken(user, { 
+    staffId: staff._id,
+    clinicId: staff.clinic._id
+  });
+
+  // Add staff profile data
+  responseData.profile = {
+    id: staff._id,
+    name: staff.name,
+    clinicId: staff.clinic._id,
+    clinicName: staff.clinic.clinicname,
+    phone: staff.phone,
+    address: staff.address,
+    city: staff.city,
+    gender: staff.gender,
+    status: staff.status,
+    isActive: staff.isActive
   };
 
   return true;

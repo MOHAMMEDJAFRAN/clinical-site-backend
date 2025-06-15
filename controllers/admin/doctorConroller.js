@@ -2,8 +2,42 @@ const mongoose = require('mongoose');
 const Doctor = require('../../models/doctor.model');
 const Merchant = require('../../models/clinical.model');
 const ShiftTime = require('../../models/shift.model');
-const { uploadToCloudinary } = require('../../utils/cloudinary');
+const { v2: cloudinary } = require('cloudinary');
+const ApiError = require('../../utils/appError');
 
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+// Helper function to upload base64 image to Cloudinary
+const uploadBase64ToCloudinary = async (base64String, folder) => {
+  try {
+    if (!base64String) return null;
+    
+    // Remove the data URL prefix if present
+    const base64Data = base64String.replace(/^data:image\/\w+;base64,/, '');
+    
+    const result = await cloudinary.uploader.upload(
+      `data:image/webp;base64,${base64Data}`, {
+        folder: folder,
+        resource_type: 'image',
+        format: 'webp',
+        quality: 'auto:good',
+        width: 500,
+        height: 500,
+        crop: 'fill'
+      }
+    );
+    
+    return result.secure_url;
+  } catch (error) {
+    console.error('Cloudinary upload error:', error);
+    throw new ApiError(500, 'Failed to upload image');
+  }
+};
 // 🔁 Helper: Upsert shift times with validation and transaction support
 const upsertShiftTimes = async (doctorId, shiftTimes, merchantId, session = null) => {
   if (!shiftTimes || !Array.isArray(shiftTimes)) {
@@ -74,8 +108,8 @@ const upsertShiftTimes = async (doctorId, shiftTimes, merchantId, session = null
   return updatedShiftIds;
 };
 
-// ✅ Create a new doctor (without shift times)
-exports.createDoctor = async (req, res) => {
+// ✅ Create a new doctor (without shift times) - UPDATED
+exports.createDoctor = async (req, res, next) => {
   const session = await mongoose.startSession();
   session.startTransaction();
   
@@ -88,32 +122,20 @@ exports.createDoctor = async (req, res) => {
       email, 
       city, 
       clinicName, 
-      status
+      status,
+      photoBase64
     } = req.body;
 
     // Validate merchant exists
     const merchant = await Merchant.findById(merchantId).session(session);
     if (!merchant) {
-      await session.abortTransaction();
-      return res.status(404).json({ 
-        success: false,
-        message: 'Merchant not found' 
-      });
+      throw new ApiError(404, 'Merchant not found');
     }
 
     // Handle photo upload
     let photoUrl = '';
-    if (req.file) {
-      try {
-        const result = await uploadToCloudinary(req.file.buffer, 'doctor-photos');
-        photoUrl = result.secure_url;
-      } catch (uploadError) {
-        await session.abortTransaction();
-        return res.status(500).json({
-          success: false,
-          message: 'Failed to upload photo'
-        });
-      }
+    if (photoBase64) {
+      photoUrl = await uploadBase64ToCloudinary(photoBase64, 'doctor-photos');
     }
 
     // Create doctor
@@ -127,23 +149,32 @@ exports.createDoctor = async (req, res) => {
       clinicName: clinicName || merchant.clinicname,
       photo: photoUrl,
       status: status || 'Available',
-      shiftTimes: [] // Initialize empty shiftTimes array
+      shiftTimes: []
     });
 
+    // Save doctor
     await doctor.save({ session });
+
+    // Commit transaction
     await session.commitTransaction();
+
+    // Fetch the complete doctor data with populated fields
+    const createdDoctor = await Doctor.findById(doctor._id)
+      .populate('merchant', 'clinicname address')
+      .session(session);
+
+    if (!createdDoctor) {
+      throw new ApiError(500, 'Failed to fetch created doctor data');
+    }
 
     res.status(201).json({ 
       success: true, 
-      data: doctor 
+      data: createdDoctor 
     });
 
   } catch (error) {
     await session.abortTransaction();
-    res.status(400).json({ 
-      success: false, 
-      message: error.message 
-    });
+    next(error);
   } finally {
     session.endSession();
   }
@@ -217,31 +248,33 @@ exports.getDoctorDetails = async (req, res) => {
 };
 
 // ✅ Update a doctor's details and shifts
-exports.updateDoctor = async (req, res) => {
+// ✅ Update a doctor's details and shifts
+exports.updateDoctor = async (req, res, next) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
     const { id } = req.params;
-    const { shiftTimes, ...doctorData } = req.body;
+    const { shiftTimes, photoBase64, ...doctorData } = req.body;
 
     // Check if doctor exists
     const existingDoctor = await Doctor.findById(id).session(session);
     if (!existingDoctor) {
-      await session.abortTransaction();
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Doctor not found' 
-      });
+      throw new ApiError(404, 'Doctor not found');
     }
 
     // Handle photo upload if provided
-    if (req.file) {
-      const result = await uploadToCloudinary(
-        req.file.buffer.toString('base64'), 
-        'doctors-photos'
-      );
-      doctorData.photo = result.secure_url;
+    if (photoBase64) {
+      // Upload new photo
+      const newPhotoUrl = await uploadBase64ToCloudinary(photoBase64, 'doctor-photos');
+      
+      // Delete old photo from Cloudinary if it exists
+      if (existingDoctor.photo) {
+        const publicId = existingDoctor.photo.split('/').slice(-2).join('/').split('.')[0];
+        await cloudinary.uploader.destroy(publicId);
+      }
+      
+      doctorData.photo = newPhotoUrl;
     }
 
     // Update doctor details
@@ -264,25 +297,23 @@ exports.updateDoctor = async (req, res) => {
 
     await session.commitTransaction();
 
-    // Get the full updated doctor data
+    // Get the full updated doctor data with populated shifts
     const updatedDoctor = await Doctor.findById(id)
       .populate({
         path: 'shiftTimes',
         match: { isActive: true },
         select: 'shiftName timeRange date status isActive'
-      });
+      })
+      .lean(); // Convert to plain JavaScript object
 
     res.status(200).json({ 
       success: true, 
-      data: updatedDoctor 
+      data: updatedDoctor // Ensure this includes _id
     });
 
   } catch (error) {
     await session.abortTransaction();
-    res.status(400).json({ 
-      success: false, 
-      message: error.message 
-    });
+    next(error);
   } finally {
     session.endSession();
   }

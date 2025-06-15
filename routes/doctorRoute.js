@@ -1,12 +1,29 @@
 const express = require('express');
 const router = express.Router();
 const doctorController = require('../controllers/admin/doctorConroller');
-const upload = require('../utils/doc.img');
+// const upload = require('../utils/doc.img');
 
 
 // 🔄 Doctor CRUD Routes
 
 // Create a new doctor for a clinic
+const multer = require('multer');
+const upload = multer({
+  limits: {
+    fileSize: 20 * 1024 * 1024, // 5MB limit
+    fieldNameSize: 1000,
+    fieldSize: 25 * 1024 * 1024,
+    
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'), false);
+    }
+  }
+});
+
 router.post(
   '/newDoc/:merchantId',
   upload.single('photo'),

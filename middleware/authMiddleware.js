@@ -1,10 +1,11 @@
 const jwt = require('jsonwebtoken');
 const userModel = require('../models/userModel');
 const merchntodel = require('../models/clinical.model');
+const Staff = require('../models/staff.model');
 
 /**
  * @desc    Protect routes with JWT authentication
- * @param   {string} [role] - Optional required role (e.g., 'merchant', 'admin')
+ * @param   {string} [role] - Optional required role (e.g., 'merchant', 'admin', 'staff')
  */
 const authMiddleware = async (req, res, next) => {
   try {
@@ -57,10 +58,23 @@ const authMiddleware = async (req, res, next) => {
         });
       }
 
-   
-
       // Attach merchant profile to request
       req.merchant = merchant;
+    }
+
+    // 6) Additional checks for staff
+    if (currentUser.role === 'staff') {
+      const staff = await Staff.findOne({ user: currentUser._id });
+      
+      if (!staff) {
+        return res.status(403).json({
+          success: false,
+          message: 'Staff profile not found',
+        });
+      }
+
+      // Attach staff profile to request
+      req.staff = staff;
     }
 
     // Attach user to request
@@ -90,5 +104,6 @@ module.exports = {
   authMiddleware,       // General authentication
   requireRole,          // Role-specific authentication
   merchantAuth: requireRole('merchant'),  // Pre-configured for merchants
-  adminAuth: requireRole('admin')         // Pre-configured for admins
+  adminAuth: requireRole('admin'),        // Pre-configured for admins
+  staffAuth: requireRole('staff')         // Pre-configured for staff
 };

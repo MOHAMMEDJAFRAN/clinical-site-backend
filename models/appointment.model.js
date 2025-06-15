@@ -60,6 +60,10 @@ const AppointmentSchema = new mongoose.Schema({
     enum: ['Confirm', 'Completed', 'Cancelled'],
     default: 'Pending'
   },
+  isRead: {
+    type: Boolean,
+    default: false
+  },
   createdAt: {
     type: Date,
     default: Date.now
