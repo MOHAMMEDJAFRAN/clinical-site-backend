@@ -29,7 +29,7 @@ connectDB()
 
 // Enable CORS for all routes
 app.use(cors({origin:'https://clinical-site-test.vercel.app',
-    // 'http://localhost:3000',
+      // 'http://localhost:3000',
     
     
     credentials: true

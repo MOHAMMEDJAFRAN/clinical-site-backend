@@ -1,7 +1,7 @@
 // controllers/merchantController.js
 
 const bcrypt = require('bcryptjs');
-// const { sendEmail } = require('../../services/emailService');
+const { sendEmail } = require('../../services/emailService');
 const userModel = require('../../models/userModel');
 const merchntodel = require('../../models/clinical.model');
 const jwt = require("jsonwebtoken")
@@ -33,21 +33,21 @@ exports.registerMerchant = async (req, res) => {
     // Check if user already exists
     const existingUser = await userModel.findOne({ email });
     if (existingUser) {
-      return res.status(400).json({ 
+      return res.status(409).json({ 
         success: false, 
-        message: 'User already exists' 
+        message: 'Email already registered' 
       });
     }
 
     // Hash password
-    // const salt = await bcrypt.genSalt(10);
-    // const hashedPassword = await bcrypt.hash(password, salt);
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
 
     // Create user
     const user = await userModel.create({
       email,
-      password,
-      role: 'merchant' // Set role directly to merchant
+      password: hashedPassword,
+      role: 'merchant'
     });
 
     // Create merchant profile
@@ -58,15 +58,37 @@ exports.registerMerchant = async (req, res) => {
       address,
       in_chargename,
       phoneNumber,
-      isApproved: true // Default to false, admin must approve
+      isApproved: true
     });
 
-    // Send verification email (optional)
-    // await sendEmail({
-    //   to: user.email,
-    //   subject: 'Merchant Registration Received',
-    //   text: `Your merchant account for ${clinicname} has been received and is pending approval.`
-    // });
+    // Send welcome email with credentials
+    try {
+      await sendEmail({
+        to: email,
+        subject: `Welcome to Our System - ${clinicname}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #2563eb;">Welcome to Our Healthcare System</h2>
+            <p>Dear ${in_chargename},</p>
+            <p>Your clinical center <strong>${clinicname}</strong> has been successfully registered in our system.</p>
+            <p>Here are your login credentials:</p>
+            <div style="background: #f3f4f6; padding: 12px; border-radius: 4px; margin: 12px 0;">
+              <p><strong>Email:</strong> ${email}</p>
+              <p><strong>Password:</strong> ${password}</p>
+            </div>
+            <p style="color: #dc2626; font-weight: bold;">Please keep these credentials secure and change your password after first login.</p>
+            <p>You can now login to the system and start managing your clinic.</p>
+            <p>If you have any questions, please contact our support team.</p>
+            <br>
+            <p>Best regards,</p>
+            <p>The Healthcare Team</p>
+          </div>
+        `
+      });
+    } catch (emailError) {
+      console.error('Failed to send email:', emailError);
+      // Continue even if email fails, but log it
+    }
 
     res.status(201).json({ 
       success: true, 
@@ -74,8 +96,7 @@ exports.registerMerchant = async (req, res) => {
         user: {
           id: user._id,
           email: user.email,
-          role: user.role,
-          isVerified: user.isVerified
+          role: user.role
         },
         merchant: {
           id: merchant._id,
@@ -83,7 +104,7 @@ exports.registerMerchant = async (req, res) => {
           isApproved: merchant.isApproved
         }
       },
-      message: 'Merchant registration submitted for approval'
+      message: 'Merchant registered successfully!'
     });
 
   } catch (err) {
@@ -95,7 +116,6 @@ exports.registerMerchant = async (req, res) => {
     });
   }
 };
-
 
 exports.loginMerchant = async (req, res) => {
   try {
